@@ -34,6 +34,15 @@ function getAddress(dom)
 	return [business_name, business_addr, business_country];
 }
 
+function remove_box()
+{
+	let self_exists = document.querySelector("#wheres-that-from");
+	if (self_exists != null)
+	{
+		self_exists.remove();
+	}
+}
+
 /**
 	Adds a box above the "Add to cart" button
 	
@@ -44,7 +53,6 @@ function getAddress(dom)
  */
 function insertBox(seller, address_info, brand, is_chinese_brand)
 {
-	let self_exists = document.querySelector("#wheres-that-from");
 	let buy_it = document.querySelector("#desktop_buybox")
 	let new_elem = document.createElement("div");
 	let border_color = "orange";
@@ -67,11 +75,6 @@ function insertBox(seller, address_info, brand, is_chinese_brand)
 		is_chinese_brand = true;
 	}
 	
-	if (self_exists != null)
-	{
-		self_exists.remove();
-	}
-
 	new_elem.setAttribute("id", "wheres-that-from");
 	new_elem.setAttribute("class", "celwidget");
 	new_elem.innerHTML = `
@@ -186,6 +189,8 @@ async function checkSeller()
 	if (document.querySelector("#dp") == null)
 		return;
 
+	remove_box();
+
 	// If there are multiple offers, they use an accordion layout instead
 	let buy_row = document;
 	let used = false;
@@ -193,7 +198,10 @@ async function checkSeller()
 	{
 		buy_row = document.querySelector("div.a-accordion-active");
 		if (buy_row == null)
+		{
+			apply_observers();
 			return;
+		}
 		
 		if (buy_row.id == "usedAccordionRow")
 		{
@@ -203,6 +211,7 @@ async function checkSeller()
 
 	let seller_href = null;
 	let seller_info = [null, null];
+	let is_amazon = false;
 
 	// Get the seller block
 	if (used)
@@ -210,7 +219,10 @@ async function checkSeller()
 		// Re-sale items have a different layout than normal items
 		let seller_elements = buy_row.querySelectorAll("#merchant-info > a");
 		if (seller_elements.length == 0)
+		{
+			apply_observers();
 			return;
+		}
 
 		seller_href = seller_elements[0];
 	}
@@ -218,10 +230,15 @@ async function checkSeller()
 	{
 		let seller_elements = buy_row.querySelectorAll("div[data-csa-c-slot-id='odf-feature-text-desktop-merchant-info']");
 		if (seller_elements.length == 0)
+		{
+			apply_observers();
 			return;
+		}
 		
 		let seller_span = seller_elements[0].querySelector("span.offer-display-feature-text-message");
 		seller_href = seller_span.querySelector("#sellerProfileTriggerId");
+		if (seller_href == null && seller_span.innerText == "Amazon.com")
+			is_amazon = true;
 	}
 	
 	// See who is selling it or if it's Amazon
@@ -232,7 +249,7 @@ async function checkSeller()
 		// It's a real seller, get their name and profile link
 		seller_info = [seller_href.text, seller_href.href];
 	}
-	else if (seller_span.innerText == "Amazon.com")
+	else if (is_amazon)
 	{
 		// It's Amazon selling it directly
 		seller_info = ["Amazon.com", null];
