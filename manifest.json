@@ -1,7 +1,7 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "name": "Where's that from?",
-  "version": "1.2",
+  "version": "1.3",
 
   "description": "Shows more info about Amazon sellers and brands",
 
@@ -16,9 +16,18 @@
     }
   ],
   
+  "options_ui": {
+    "page": "options.html"
+  },
+  
+  "permissions": [
+    "storage", 
+    "webRequest"
+  ],
+  
   "browser_specific_settings": {
     "gecko": {
-      "update_url": "https://theexiled.pwnageservers.com/wheres_that_from/updates.json"
+	  "id": "plugin@wheresthatfrom.org"
     }
   }
 }

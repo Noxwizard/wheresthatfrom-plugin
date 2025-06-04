@@ -1,5 +1,31 @@
 var seller_cache = {};
 var observer;
+var trademarkLookupAllowed = false;
+
+function injectCSS()
+{
+	var css = document.createElement("style");
+	css.setAttribute("type", "text/css");
+	css.textContent = `
+.wtf-spinner {
+   width: 12px;
+   height: 12px;
+   display: inline-block;
+   border-radius: 50%;
+   background: radial-gradient(farthest-side,#474bff 94%,#0000) top/3.8px 3.8px no-repeat,
+          conic-gradient(#0000 30%,#474bff);
+   -webkit-mask: radial-gradient(farthest-side,#0000 calc(100% - 3.8px),#000 0);
+   animation: wtf-spinner-anim 1s infinite linear;
+}
+
+@keyframes wtf-spinner-anim {
+   100% {
+      transform: rotate(1turn);
+   }
+}
+`;
+	document.documentElement.appendChild(css);
+}
 
 function getAddress(dom)
 {
@@ -44,57 +70,254 @@ function remove_box()
 }
 
 /**
+ Just a simple hueristic to see if it's a Chinese company
+ If it's 5-9 characters and all uppercase, it's Chinese
+ */
+function chinese_brand_heuristics(brand)
+{
+	if (brand.length >= 5 && brand.length <= 9)
+	{
+		for (const letter of brand)
+		{
+			if (!(letter.charCodeAt(0) >= 65 && letter.charCodeAt(0) <= 90))
+			{
+				// Contains a non-uppercase
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	return false;
+}
+
+function is_chinese(brand, trademark_data, seller_country)
+{
+	let source = "";
+	let reason = "";
+	let country = "";
+	let foreign = false;
+	let chinese = false;
+
+	// Check the trademark data if available
+	if (trademark_data != null)
+	{
+		// Trademark
+		if ("mark_info" in trademark_data)
+		{
+			reason = "trademark";
+			source = trademark_data["mark_info"]["source"]
+			if (source == "https://uspto.gov/")
+			{
+				source = "https://tsdr.uspto.gov/#caseNumber=" + trademark_data["mark_info"]["serial"] + "&caseSearchType=US_APPLICATION&caseType=DEFAULT&searchType=statusSearch"
+			}
+			
+			country = trademark_data["mark_info"]["country"];
+			if (trademark_data["mark_info"]["is_foreign"] == "1")
+			{
+				foreign = true;
+				if (country == "CN")
+				{
+					chinese = true;
+				}
+			}
+		}
+		// Company
+		else if ("company_info" in trademark_data)
+		{
+			reason = "company";
+			source = trademark_data["company_info"]["source"]
+			country = trademark_data["company_info"]["country"];
+			if (trademark_data["company_info"]["is_foreign"] == "1")
+			{
+				foreign = true;
+				if (country == "CN")
+				{
+					chinese = true;
+				}
+			}
+		}
+	}
+
+	// See if the brand name looks chinese, but only if we don't already have trademark data
+	if (!chinese && source == "" && chinese_brand_heuristics(brand))
+	{
+		reason = "heuristics";
+		chinese = true;
+		foreign = true;
+		country = "CN";
+	}
+
+	// See if the seller is from China
+	if (!chinese && seller_country.toLowerCase().includes("china"))
+	{
+		reason = "seller";
+		chinese = true;
+		foreign = true;
+		country = "CN";
+	}
+
+	return {
+		is_chinese: chinese,
+		is_foreign: foreign,
+		country: country,
+		reason: reason,
+		source: source
+	};
+}
+
+function apply_heuristics(seller, address_info, brand, trademark_data)
+{
+	const danger_color = "#b90000";
+	const warn_color = "orange";
+	const safe_color = "green";
+	let brand_color = warn_color;
+	let border_color = warn_color;
+	let likeliness = "Unlikely";
+
+
+	let heuristic_reasons = {
+		trademark: "USPTO Trademark",
+		company: "USPTO Company",
+		seller: "Seller Address",
+		heuristics: "Brand heuristic",
+	};
+	
+	// Run heuristics on the brand
+	let heuristics = is_chinese(brand, trademark_data, address_info[2]);
+
+	if (heuristics["is_chinese"])
+	{
+		border_color = danger_color;
+		brand_color = danger_color;
+		
+		// Trust USPTO data more than heuristics
+		if (heuristics["reason"] == "trademark" || heuristics["reason"] == "company")
+		{
+			likeliness = "Yes";
+		}
+		else if (heuristics["reason"] == "heuristics")
+		{
+			likeliness = "Likely";
+			
+			// If the brand looks chinese and comes from China, flag it
+			if (address_info[2].toLowerCase().includes("china"))
+			{
+				likeliness = "Yes";
+			}
+		}
+		else if (heuristics["reason"] == "seller")
+		{
+			likeliness = "Likely";
+		}
+	}
+	
+	// Not chinese, but foreign
+	if (!heuristics["is_chinese"] && heuristics["is_foreign"])
+	{
+		border_color = warn_color;
+		brand_color = warn_color;
+	}
+	else if (heuristics["country"] == "US" || 
+			address_info[2].toLowerCase().includes("usa") ||
+			address_info[2].toLowerCase().includes("us") ||
+			address_info[2].toLowerCase().includes("united states"))
+	{
+		border_color = safe_color;
+		brand_color = safe_color;
+		likeliness = "No";
+	}
+	
+	
+	let foreign_span = document.querySelector("#wtfforeign");
+	let chinese_span = document.querySelector("#wtfchinese");
+	let heur_span = document.querySelector("#wtfheur");
+	let border_div = document.querySelector("#wtfborder");
+	
+	if (foreign_span != null)
+	{
+		foreign_span.replaceChildren(); // Delete spinner
+		foreign_span.innerText = heuristics["is_foreign"] ? "Yes - " + heuristics["country"]  : "No";
+	}
+	
+	if (chinese_span != null)
+	{
+		chinese_span.replaceChildren(); // Delete spinner
+		
+		let src_node = document.createElement("a");
+		src_node.innerText = " (source)";
+		src_node.href = heuristics["source"];
+		
+		let likeliness_span_node = document.createElement("span");
+		likeliness_span_node.style = "color: " + brand_color;
+		likeliness_span_node.innerText = likeliness;
+		
+		chinese_span.appendChild(likeliness_span_node);
+		if (heuristics["source"] != "")
+		{
+			chinese_span.appendChild(src_node);
+		}
+	}
+	
+	if (heur_span != null)
+	{
+		heur_span.replaceChildren(); // Delete spinner
+		if (heuristics["reason"] != "")
+		{
+			heur_span.innerText = heuristic_reasons[heuristics["reason"]];
+		}
+		else
+		{
+			heur_span.innerText = "none";
+		}
+	}
+	
+	if (border_div != null)
+	{
+		border_div.style = "border: 5px " + border_color + " solid"
+	}
+}
+
+/**
 	Adds a box above the "Add to cart" button
 	
 	@param seller: Name of seller
 	@param address_info: [business name, business address, country]
 	@param brand: Name of product brand
-	@param is_chinese_brand: Is the brand likely Chinese?
  */
-function insertBox(seller, address_info, brand, is_chinese_brand)
+function insertBox(seller, address_info, brand)
 {
 	let buy_it = document.querySelector("#desktop_buybox")
 	let new_elem = document.createElement("div");
-	let border_color = "orange";
-	let brand_color = is_chinese_brand ? "red" : "green";
-	
-	if (address_info[2].toLowerCase().includes("china"))
-	{
-		border_color = "#b90000";
-	}
-	else if (address_info[2].toLowerCase().includes("usa") ||
-			 address_info[2].toLowerCase().includes("us") ||
-			 address_info[2].toLowerCase().includes("united states"))
-	{
-		border_color = "green";
-	}
 
-	// The hueristics didn't flag it as Chinese, but the seller is Chinese, so flag it
-	if (!is_chinese_brand && address_info[2] == "China")
-	{
-		is_chinese_brand = true;
-	}
-	
 	new_elem.setAttribute("id", "wheres-that-from");
 	new_elem.setAttribute("class", "celwidget");
 	new_elem.innerHTML = `
-<div class="celwidget">
+<div class="celwidget" id="wheresthatfrombox">
 	<div class="a-section a-spacing-mini">
-		<div class="a-box a-spacing-none a-color-base-background a-text-left" style="border: 5px ${border_color} solid">
+		<div id="wtfborder" class="a-box a-spacing-none a-color-base-background a-text-left" style="border: 5px black solid">
 			<div class="a-box-inner a-padding-base">
 				<div class="a-row a-spacing-small bbop-grid-container">
 					<div class="a-column a-span12 a-checkbox bbop-grid-container-checkbox">
-						<span class="bbop-content">
+						<span class="bbop-content" id="wheresthatfrominfo">
 							<b>Brand Name:</b> ${brand}<br>
-							<b>Chinese Brand?: </b>
-							<span style="color:${brand_color};">${ is_chinese_brand ? 'likely' : 'unlikely' }</span><br><br>
+							<b>Foreign Brand?:</b> <span id="wtfforeign"><div class="wtf-spinner"></div></span><br>
+							<b>Chinese Brand?:</b> <span id="wtfchinese"><div class="wtf-spinner"></div></span><br>
+							<b>Heuristic:</b> <span id="wtfheur"><div class="wtf-spinner"></div></span>
+							${ !trademarkLookupAllowed ? '<br><span class="a-size-small">Enable trademark data for more heuristics</span>' : '' }
+							<br><br>
 							<b>Seller:</b> ${seller}<br>
 							<b>Business Name:</b> ${address_info[0]}<br>
 							<b>Business Country:</b> ${address_info[2]}<br>
-							<b>Business Address:</b><span class="a-size-small">${address_info[1]}</span>
+							<b>Business Address:</b> <span class="a-size-small">${address_info[1]}</span>
 						</span>
 					</div>
 				</div>
+			</div>
+			<div style="text-align: right; margin-top: -50px;">
+				<span>
+					<small>Where's That From?</small>
+				</span>
 			</div>
 		</div>
 	</div>
@@ -115,28 +338,6 @@ async function getData(url)
 	let dom = new DOMParser().parseFromString(text, 'text/html');
 	
 	return getAddress(dom);
-}
-
-/**
- Just a simple hueristic to see if it's a Chinese company
- If it's 5-9 characters and all uppercase, it's Chinese
- */
-function brand_heuristics(brand)
-{
-	if (brand.length >= 5 && brand.length <= 9)
-	{
-		for (const letter of brand)
-		{
-			if (!(letter.charCodeAt(0) >= 65 && letter.charCodeAt(0) <= 90))
-			{
-				// Contains a non-uppercase
-				return false;
-			}
-		}
-		return true;
-	}
-	
-	return false;
 }
 
 function apply_observers()
@@ -293,15 +494,54 @@ async function checkSeller()
 	if (store_matches != null && store_matches.length == 2)
 		brand = store_matches[1];
 	
-	// Try to guess if the brand is Chinese
-	let is_chinese_brand = brand_heuristics(brand);
 	
 	// Draw the box
-	insertBox(seller_info[0], address_info, brand, is_chinese_brand);
+	insertBox(seller_info[0], address_info, brand);
+
+	// Get the trademark data
+	const trademark_data = await getTrademarkData(brand);
+
+	// Make informed decisions about the brand
+	apply_heuristics(seller_info[0], address_info, brand, trademark_data);
 	
 	// Watch for DOM changes
 	apply_observers();
 }
 
+async function getTrademarkData(brand)
+{
+	if (!trademarkLookupAllowed)
+		return null;
+		
+	let data = new FormData();
+	data.append("keyword", brand);
+
+	let options = {
+		method: "POST",
+		mode: "cors",
+		body: data
+	};
+    const response = await fetch("https://wheresthatfrom.org/api/v1/trademark", options);
+    if (!response.ok) {
+      console.log(`Response status: ${response.status}`);
+	  return null;
+    }
+
+	const json = await response.json();
+	
+	return json;
+}
+
+async function checkTrademarkLookupsAllowed()
+{
+	await browser.storage.sync.get("trademark")
+		.then((value) => { 
+			trademarkLookupAllowed = value["trademark"]
+		});
+}
+
+injectCSS();
+checkTrademarkLookupsAllowed();
 apply_observers();
 checkSeller();
+
