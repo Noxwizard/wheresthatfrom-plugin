@@ -1,0 +1,24 @@
+{
+  "manifest_version": 2,
+  "name": "Where's that from?",
+  "version": "1.0",
+
+  "description": "Shows more info about Amazon sellers and brands",
+
+  "icons": {
+    "48": "icons/globe-48.png"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["*://*.amazon.com/*"],
+      "js": ["amazon.js"]
+    }
+  ],
+  
+  "browser_specific_settings": {
+    "gecko": {
+      "update_url": "https://theexiled.pwnageservers.com/wheres_that_from/updates.json"
+    }
+  }
+}
