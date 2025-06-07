@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Where's that from?",
-  "version": "1.3",
+  "version": "1.3.0",
 
   "description": "Shows more info about Amazon sellers and brands",
 
@@ -27,7 +27,7 @@
   
   "browser_specific_settings": {
     "gecko": {
-	  "id": "plugin@wheresthatfrom.org"
+	  "id": "{e5d664a1-0396-44b6-a4f3-f17819e7b678}"
     }
   }
 }
