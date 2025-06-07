@@ -534,7 +534,7 @@ async function getTrademarkData(brand)
 
 async function checkTrademarkLookupsAllowed()
 {
-	await browser.storage.sync.get("trademark")
+	await chrome.storage.sync.get("trademark")
 		.then((value) => { 
 			trademarkLookupAllowed = value["trademark"]
 		});

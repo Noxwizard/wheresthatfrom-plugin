@@ -1,7 +1,7 @@
 function saveOptions(e) {
 	e.preventDefault();
 
-	browser.storage.sync.set({
+	chrome.storage.sync.set({
 		trademark: document.querySelector("#trademark").checked,
 	});
 }
@@ -15,7 +15,7 @@ function restoreOptions() {
 		console.log(`Error: ${error}`);
 	}
 
-	let tm = browser.storage.sync.get("trademark");
+	let tm = chrome.storage.sync.get("trademark");
 	tm.then(setCurrentChoice, onError);
 }
 
