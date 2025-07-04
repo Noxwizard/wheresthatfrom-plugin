@@ -437,7 +437,7 @@ async function checkSeller()
 		}
 		
 		let seller_span = seller_elements[0].querySelector("span.offer-display-feature-text-message");
-		seller_href = seller_span.querySelector("#sellerProfileTriggerId");
+		seller_href = seller_elements[0].querySelector("#sellerProfileTriggerId");
 		if (seller_href == null && seller_span.innerText == "Amazon.com")
 			is_amazon = true;
 	}
