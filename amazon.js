@@ -211,21 +211,24 @@ function apply_heuristics(seller, address_info, brand, trademark_data)
 			likeliness = "Likely";
 		}
 	}
-	
-	// Not chinese, but foreign
-	if (!heuristics["is_chinese"] && heuristics["is_foreign"])
+	else
 	{
-		border_color = warn_color;
-		brand_color = warn_color;
-	}
-	else if (heuristics["country"] == "US" || 
-			address_info[2].toLowerCase().includes("usa") ||
-			address_info[2].toLowerCase().includes("us") ||
-			address_info[2].toLowerCase().includes("united states"))
-	{
-		border_color = safe_color;
-		brand_color = safe_color;
-		likeliness = "No";
+		// Not chinese, but foreign
+		if (heuristics["is_foreign"])
+		{
+			border_color = warn_color;
+			brand_color = warn_color;
+		}
+		// Not chinese, not foreign
+		else if (heuristics["country"] == "US" || 
+				address_info[2].toLowerCase().includes("usa") ||
+				address_info[2].toLowerCase().includes("us") ||
+				address_info[2].toLowerCase().includes("united states"))
+		{
+			border_color = safe_color;
+			brand_color = safe_color;
+			likeliness = "No";
+		}
 	}
 	
 	
