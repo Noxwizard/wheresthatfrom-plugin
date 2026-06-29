@@ -486,7 +486,19 @@ async function checkSeller()
 	// Make a guess about the brand
 	let brand = "";
 	let byline = document.querySelector("#bylineInfo");
-	let store_matches = byline.innerText.match(/Visit the (.*) Store/i);
+	let premium_byline = document.querySelector("#visitStoreDesktopUrl");	// "Premium" brands get to show a logo and use a different link ID
+	let store_matches = null;
+
+	if (byline == null && premium_byline != null)
+	{
+		byline = premium_byline;
+	}
+
+	// Check for a store link
+	if (byline != null)
+	{
+		store_matches = byline.innerText.match(/Visit the (.*) Store/i);
+	}
 	
 	// Not everything has a store, might be "Brand: name" instead
 	if (store_matches == null)
